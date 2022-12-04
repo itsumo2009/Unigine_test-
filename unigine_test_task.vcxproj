@@ -47,11 +47,13 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)bin\</OutDir>
     <IntDir>junk\$(Platform)\$(Configuration)\</IntDir>
+    <IncludePath>source;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)bin\</OutDir>
     <IntDir>junk\$(Platform)\$(Configuration)\</IntDir>
+    <IncludePath>source;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -102,6 +104,7 @@
     <ClCompile Include="source\framework\object.cpp" />
     <ClCompile Include="source\framework\shader.cpp" />
     <ClCompile Include="source\framework\utils.cpp" />
+    <ClCompile Include="source\Path.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="data\shader.frag" />
@@ -486,6 +489,7 @@
     <ClInclude Include="include\GL\glxew.h" />
     <ClInclude Include="include\GL\wglew.h" />
     <ClInclude Include="include\KHR\khrplatform.h" />
+    <ClInclude Include="include\Path.h" />
     <ClInclude Include="source\framework\camera.h" />
     <ClInclude Include="source\framework\engine.h" />
     <ClInclude Include="source\framework\filesystem.h" />

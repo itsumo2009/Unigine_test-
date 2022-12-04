@@ -1,13 +1,23 @@
 #include "framework/engine.h"
 #include "framework/utils.h"
-#include "main.h"
+
+#include "Path.h"
 
 using namespace std;
 using namespace glm;
 
 const float railwayWidth = 0.1f;
+const float railWidth = 0.0125f / 2;
 const float railwaySleeperWidth = 0.15f;
 const float railwaySleeperStep = 0.3f;
+const float trainInterval = 0.2f;
+const int trainLength = 6;
+
+enum Inn
+{
+	Inner,
+	Outer
+};
 
 /*
 * Coordinate system:
@@ -15,94 +25,49 @@ const float railwaySleeperStep = 0.3f;
 * y - up
 * z - backward
 */
-glm::vec3 lerp(const glm::vec3& first, const glm::vec3& second, float t)
+
+Mesh createMeshPath(const Path& path, Inn inn)
 {
-	return first * (1 - t) + second * t;
-}
+	Path::IntervalIterator it(path, railWidth);
 
-std::vector<float> calculateSegmentLength(const std::vector<glm::vec3>& points)
-{
-	std::vector<float> result;
-	for (size_t i = 0; i < points.size(); ++i)
-	{
-		size_t j = i + 1;
-		if (j == points.size())
-		{
-			j = 0;
-		}
-
-		result.push_back(glm::distance(points[j], points[i]));
-	}
-	return result;
-}
-
-std::vector<glm::vec3> createSleeperDirections(const std::vector<glm::vec3>& directions)
-{
-	vector<glm::vec3> result_directions;
-	for (const auto& direction : directions)
-	{
-		result_directions.push_back(glm::cross(direction, glm::vec3(0, 1, 0)));
-	}
-
-	return result_directions;
-}
-
-std::vector<glm::vec3> createPathDirections(const std::vector<glm::vec3>& points)
-{
-	vector<glm::vec3> result_directions;
-	const float dt = 0.01f;
-
-	for (size_t i = 0; i < points.size(); ++i)
-	{
-		size_t j = i + 1;
-		if (j == points.size())
-		{
-			j = 0;
-		}
-
-		result_directions.push_back(glm::normalize(points[j] - points[i]));
-	}
-	return result_directions;
-}
-
-std::vector<glm::vec3> createSmoothPathPoints(const std::vector<Object*>& points)
-{
-	vector<glm::vec3> result_points;
-	const float dt = 0.01f;
-
-	for (size_t i = 0; i < points.size(); ++i)
-	{
-		size_t j = i + 1;
-		if (j == points.size())
-		{
-			j = 0;
-		}
-
-		size_t k = j + 1;
-		if (k == points.size())
-		{
-			k = 0;
-		}
-
-		glm::vec3 centerFirst = 0.5f * (points[i]->getPosition() + points[j]->getPosition());
-		glm::vec3 centerSecond = 0.5f * (points[j]->getPosition() + points[k]->getPosition());
-
-		for (float t = 0; t < 1.0f; t += dt)
-		{
-			auto firstPoint = lerp(centerFirst, points[j]->getPosition(), t);
-			auto secondPoint = lerp(points[j]->getPosition(), centerSecond, t);
-			result_points.push_back(lerp(firstPoint, secondPoint, t));
-		}
-	}
-	return result_points;
-}
-
-Mesh createMeshPath(const vector<Object*>& points)
-{
-	
 	vector<Vertex>       vertices;
 	vector<unsigned int> indices;
+
+	for (int i = 0; i < path.length() / railWidth; ++i)
+	{
+		glm::vec3 pos = it.position;
+		Vertex v;
+		if (inn == Inner)
+		{
+			v.position = pos - it.normal * (railwayWidth * 0.5f + railWidth);
+			vertices.push_back(v);
+			v.position = pos - it.normal * railwayWidth * 0.5f;
+			vertices.push_back(v);
+		}
+		else
+		{
+			v.position = pos + it.normal * railwayWidth * 0.5f;
+			vertices.push_back(v);
+			v.position = pos + it.normal * (railwayWidth * 0.5f + railWidth);
+			vertices.push_back(v);
+		}
+
+		it.advance();
+	}
 	
+	for (int i = 0; i < vertices.size(); i += 2)
+	{
+		int j = (i + 1) % vertices.size();
+		int k = (i + 2) % vertices.size();
+		int q = (i + 3) % vertices.size();
+		indices.push_back(j);
+		indices.push_back(i);
+		indices.push_back(k);
+
+		indices.push_back(q);
+		indices.push_back(j);
+		indices.push_back(k);
+	}
 	return Mesh(vertices, indices);
 }
 
@@ -122,6 +87,7 @@ int main()
 	// create shared meshes
 	Mesh plane_mesh = createPlane();
 	Mesh sphere_mesh = createSphere();
+	Mesh cube_mesh = createCube();
 
 	// create background objects
 	Object *plane = engine->createObject(&plane_mesh);
@@ -141,60 +107,68 @@ int main()
 		 4.0f, -0.375f, -3.0f, // 7
 		 8.0f, -0.375f,  7.0f  // 8
 	};
-	vector<Object*> points;
+
+	vector<Object*> train;
+	for (int i = 0; i < trainLength; ++i)
+	{
+		Object* cube = engine->createObject(&cube_mesh);
+		cube->setColor(0.75, 0.75, 0.75);
+		cube->setScale(railwaySleeperWidth);
+		train.push_back(cube);
+	}
+
+	vector<vec3> positions;
 	for (int i = 0; i < 8; i++)
 	{
-		Object *sphere = engine->createObject(&sphere_mesh);
-		sphere->setColor(1, 0, 0);
-		sphere->setPosition(path[i*3], path[i*3+1], path[i*3+2]);
-		sphere->setScale(0.25f);
-		points.push_back(sphere);
+		positions.push_back(glm::vec3(path[i * 3], path[i * 3 + 1], path[i * 3 + 2]));
 	}
-	LineDrawer path_drawer(path, points.size(), true);
-	vector<glm::vec3> result_points = createSmoothPathPoints(points);
-	vector<float> segment_length = calculateSegmentLength(result_points);
-	vector<glm::vec3> result_directions = createPathDirections(result_points);
-	vector<glm::vec3> sleeper_directions = createSleeperDirections(result_directions);
 
-	LineDrawer smooth_path_driver(result_points, true);
-	smooth_path_driver.setColor(1.0f, 0.5f, 0.5f);
+	Path smoothPath(positions);
 
-	float current_length = 0.0f;
-	for (int i = 0; i < segment_length.size(); ++i)
+	Mesh railwayMeshInner(createMeshPath(smoothPath, Inn::Inner));
+	Object* railwayInner = engine->createObject(&railwayMeshInner);
+	railwayInner->setColor(0.75, 0.75, 0.75);
+	railwayInner->setPosition(0, 0.0005f, 0);
+
+	Mesh railwayMeshOuter(createMeshPath(smoothPath, Inn::Outer));
+	Object* railwayOuter = engine->createObject(&railwayMeshOuter);
+	railwayOuter->setColor(0.75, 0.75, 0.75);
+	railwayOuter->setPosition(0, 0.0005f, 0);
+
+	std::vector<Path::VelocityIterator> its;
+	for (int i = 0; i < trainLength; ++i)
 	{
-		int j = i + 1;
-		if (j == segment_length.size())
-		{
-			j = 0;
-		}
+		its.emplace_back(smoothPath, 1.2f, -i * trainInterval);
+	}
 
-		if (current_length + segment_length[i] > railwaySleeperStep || i == 0)
-		{
-			float t = i ==0 ? 0 : railwaySleeperStep - current_length / segment_length[i];
-			Object* sphere = engine->createObject(&sphere_mesh);
-			sphere->setColor(0, i * 1.0f / segment_length.size(), 0);
-			sphere->setPosition(lerp(result_points[i], result_points[j], t) + lerp(sleeper_directions[i], sleeper_directions[j], t) * railwaySleeperWidth * 0.5f);
-			sphere->setScale(0.15f);
-
-			sphere = engine->createObject(&sphere_mesh);
-			sphere->setColor(0, 0, i * 1.0f / segment_length.size());
-			sphere->setPosition(lerp(result_points[i], result_points[j], t) - lerp(sleeper_directions[i], sleeper_directions[j], t) * railwaySleeperWidth * 0.5f);
-			sphere->setScale(0.15f);
-			current_length -= railwaySleeperStep;
-		}
-
-		current_length += segment_length[i];
+	Path::IntervalIterator intervalIterator(smoothPath, railwaySleeperStep);
+	for (int i = 0; i < smoothPath.length() / railwaySleeperStep; ++i)
+	{
+		Object* sleeper = engine->createObject(&cube_mesh);
+		sleeper->setColor(185 / 255.0f, 122 / 255.0f, 87 / 255.0f);
+		glm::vec3 pos = intervalIterator.position;
+		pos.y -= 0.0025f;
+		sleeper->setPosition(pos);
+		sleeper->setRotation(0, glm::atan(intervalIterator.direction.x, intervalIterator.direction.z) * 180 / glm::pi<float>(), 0);
+		sleeper->setScale(railwaySleeperWidth, 0.005f, 0.005f);
+		intervalIterator.advance();
 	}
 
 	// main loop
 	while (!engine->isDone())
 	{
+		for (int i = 0; i < 6; ++i)
+		{
+			auto& it = its[i];
+			it.advance(engine->getDeltaTime());
+			glm::vec3 pos = it.position;
+			pos.y += railwaySleeperWidth / 2;
+			train[i]->setPosition(pos);
+			train[i]->setRotation(0, glm::atan(it.direction.x, it.direction.z) * 180 / glm::pi<float>(), 0);
+		}
+		
 		engine->update();
 		engine->render();
-
-		smooth_path_driver.draw();
-		path_drawer.draw();
-		
 		engine->swap();
 	}
 
